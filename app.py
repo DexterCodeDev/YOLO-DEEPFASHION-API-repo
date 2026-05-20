@@ -5,11 +5,27 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-app = FastAPI(title="DeepFashion2 Inference API")
+app = FastAPI()
 
-# Load your custom DeepFashion2 Medium model globally
-# Make sure your file is named exactly 'yolo_df2_m.pt' and is in the repo!
-model = YOLO('yolo_df2_m.pt')
+# 1. Load the DeepFashion2 Medium model
+model = YOLO('fashion.pt')
+
+# 2. The official DeepFashion2 13-category vocabulary
+deepfashion_classes = [
+    "short sleeve top", 
+    "long sleeve top", 
+    "short sleeve outwear", 
+    "long sleeve outwear", 
+    "vest", 
+    "sling", 
+    "shorts", 
+    "trousers", 
+    "skirt", 
+    "short sleeve dress", 
+    "long sleeve dress", 
+    "vest dress", 
+    "sling dress"
+]
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
@@ -19,15 +35,15 @@ async def predict(file: UploadFile = File(...)):
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
     # Run AI inference
-    results = model(img)
+    results = model(img, conf=0.25, imgsz=1024)
     
     # Extract results
     boxes = results[0].boxes.xyxy.tolist()
     classes = results[0].boxes.cls.tolist()
     confidences = results[0].boxes.conf.tolist()
     
-    # Map the AI's class ID numbers back to their text names (e.g., "skirt", "top")
-    class_names = [model.names[int(c)] for c in classes]
+    # Map the AI's class ID numbers to the DeepFashion2 words
+    class_names = [deepfashion_classes[int(c)] for c in classes]
     
     return {
         "boxes": boxes, 
@@ -36,6 +52,5 @@ async def predict(file: UploadFile = File(...)):
     }
 
 if __name__ == "__main__":
-    # Cloud Run requires binding to 0.0.0.0 and the injected PORT
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
