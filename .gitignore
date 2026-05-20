@@ -13,3 +13,4 @@ crop_fashion.py
 *.jpg
 *.jpeg
 *.png
+*.pt
