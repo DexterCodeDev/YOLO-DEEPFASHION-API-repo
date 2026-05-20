@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+.env
+test.py
+local_test.py
+world_test.py
+crop_fashion.py
+*.jpg
+*.jpeg
+*.png
