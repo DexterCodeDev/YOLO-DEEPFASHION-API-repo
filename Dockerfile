@@ -12,8 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # The External Download Trick
-# IMPORTANT: Replace the URL in quotes with your actual direct download link!
-RUN wget -O fashion.pt "https://huggingface.co/YOUR_LINK_HERE/fashion.pt"
+RUN wget -O fashion.pt "https://huggingface.co/Bingsu/adetailer/resolve/main/deepfashion2_yolov8s-seg.pt"
 
 COPY . .
 
