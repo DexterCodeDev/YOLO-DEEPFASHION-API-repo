@@ -1,16 +1,19 @@
+# Python artifacts
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.env
+.venv
 env/
 venv/
-.venv/
-.env
-test.py
-local_test.py
-world_test.py
-crop_fashion.py
-*.jpg
-*.jpeg
-*.png
-*.pt
+ENV/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Hugging Face cache (if running locally)
+huggingface_cache/
