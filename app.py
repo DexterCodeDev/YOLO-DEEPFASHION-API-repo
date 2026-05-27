@@ -1,56 +1,74 @@
 import os
-from fastapi import FastAPI, UploadFile, File
-import uvicorn
-import cv2
-import numpy as np
-from ultralytics import YOLO
+import io
+import torch
+from PIL import Image
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
+from transformers import AutoImageProcessor, AutoModelForObjectDetection
 
-app = FastAPI()
+# Initializing API
+app = FastAPI(
+    title="Fashion Object Detection API",
+    description="Serverless inference for apparel detection.",
+    contact={"email": "support@sereneclothing.store"}
+)
 
-# 1. Load the DeepFashion2 Medium model
-model = YOLO('fashion.pt')
+# Configuration
+MODEL_ID = "yainage90/fashion-object-detection"
+HF_TOKEN = os.environ.get("HF_TOKEN")
+# Cloud Run doesn't use GPUs, so we explicitly lock to CPU to avoid overhead
+DEVICE = torch.device('cpu') 
 
-# 2. The official DeepFashion2 13-category vocabulary
-deepfashion_classes = [
-    "short sleeve top", 
-    "long sleeve top", 
-    "short sleeve outwear", 
-    "long sleeve outwear", 
-    "vest", 
-    "sling", 
-    "shorts", 
-    "trousers", 
-    "skirt", 
-    "short sleeve dress", 
-    "long sleeve dress", 
-    "vest dress", 
-    "sling dress"
-]
+print(f"Loading {MODEL_ID} into memory...")
+try:
+    processor = AutoImageProcessor.from_pretrained(MODEL_ID, token=HF_TOKEN)
+    model = AutoModelForObjectDetection.from_pretrained(MODEL_ID, token=HF_TOKEN).to(DEVICE)
+    print("Model ready!")
+except Exception as e:
+    print(f"Failed to load model: {e}")
+    raise e
 
-@app.post("/predict")
-async def predict(file: UploadFile = File(...)):
-    # Read and decode the uploaded image
-    contents = await file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    
-    # Run AI inference
-    results = model(img, conf=0.25, imgsz=1024)
-    
-    # Extract results
-    boxes = results[0].boxes.xyxy.tolist()
-    classes = results[0].boxes.cls.tolist()
-    confidences = results[0].boxes.conf.tolist()
-    
-    # Map the AI's class ID numbers to the DeepFashion2 words
-    class_names = [deepfashion_classes[int(c)] for c in classes]
-    
+@app.get("/")
+def health_check():
     return {
-        "boxes": boxes, 
-        "classes": class_names, 
-        "confidences": confidences
+        "status": "healthy", 
+        "model": MODEL_ID, 
+        "categories": list(model.config.id2label.values())
     }
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+@app.post("/predict")
+async def predict(file: UploadFile = File(...), threshold: float = 0.4):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid file. Please upload an image.")
+
+    try:
+        # Load and convert image
+        image_bytes = await file.read()
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        
+        # Prepare inputs
+        inputs = processor(images=[image], return_tensors="pt").to(DEVICE)
+        
+        # Run inference
+        with torch.no_grad():
+            outputs = model(**inputs)
+        
+        # Scale bounding boxes back to original image dimensions (requires [height, width])
+        target_sizes = torch.tensor([image.size[::-1]]) 
+        results = processor.post_process_object_detection(
+            outputs, threshold=threshold, target_sizes=target_sizes
+        )[0]
+        
+        # Format the response payload
+        detections = []
+        for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
+            detections.append({
+                "label": model.config.id2label[label.item()],
+                "confidence": round(score.item(), 3),
+                "bbox": [round(i, 2) for i in box.tolist()] # [xmin, ymin, xmax, ymax]
+            })
+            
+        return JSONResponse(content={"detections": detections})
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
