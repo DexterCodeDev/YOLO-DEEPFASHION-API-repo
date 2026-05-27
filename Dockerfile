@@ -1,32 +1,19 @@
-FROM python:3.11-slim
+FROM python:3.10-slim
 
-ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PORT=8080
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libglib2.0-0 \
-    libsm6 \
-    libxrender1 \
-    libxext6 \
-    && rm -rf /var/lib/apt/lists/*
+# Install system graphics dependencies and wget
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 wget && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir --upgrade pip
-
-RUN pip install --no-cache-dir \
-    -r requirements.txt
+# The External Download Trick
+RUN wget -O fashion.pt "https://huggingface.co/Bingsu/adetailer/resolve/main/deepfashion2_yolov8s-seg.pt"
 
 COPY . .
 
-EXPOSE 8080
-
-CMD exec uvicorn app:app \
-    --host 0.0.0.0 \
-    --port ${PORT} \
-    --workers 1
+CMD ["python", "app.py"]
