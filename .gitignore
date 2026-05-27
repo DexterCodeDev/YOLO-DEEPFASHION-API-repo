@@ -1,19 +1,7 @@
-# Python artifacts
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-
-# Environments
+*.pyc
 .env
-.venv
-env/
 venv/
-ENV/
-
-# OS specific
-.DS_Store
-Thumbs.db
-
-# Hugging Face cache (if running locally)
-huggingface_cache/
+.venv/
+.idea/
+.vscode/
