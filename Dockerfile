@@ -1,32 +1,32 @@
-# Use a lightweight python base
 FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=8080
 
 WORKDIR /app
 
-# Ensure logs bypass buffering so they appear immediately in GCP Logs Explorer
-ENV PYTHONUNBUFFERED=True \
-    PORT=8080
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libglib2.0-0 \
+    libsm6 \
+    libxrender1 \
+    libxext6 \
+    && rm -rf /var/lib/apt/lists/*
 
-# 1. Install CPU-only PyTorch FIRST to keep the image size small
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
-
-# 2. Install the rest of the libraries
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Cache the Hugging Face model at build-time
-COPY download_model.py .
-# Accepts the token from Cloud Build if you configure it, though the model is public
-ARG HF_TOKEN
-ENV HF_TOKEN=${HF_TOKEN}
-RUN python download_model.py
+RUN pip install --no-cache-dir --upgrade pip
 
-# 4. Copy the server code
-COPY app.py .
+RUN pip install --no-cache-dir \
+    -r requirements.txt
 
-# Expose standard Cloud Run port
+COPY . .
+
 EXPOSE 8080
 
-# 5. Boot Uvicorn 
-# Note: Since Cloud Run handles scaling/concurrency via instances, 1 worker is standard.
-CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD exec uvicorn app:app \
+    --host 0.0.0.0 \
+    --port ${PORT} \
+    --workers 1
